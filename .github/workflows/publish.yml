@@ -89,8 +89,8 @@ jobs:
           const head = cargo.slice(0, pkgIdx);
           const pkgSection = cargo.slice(pkgIdx, nextSectionIdx === -1 ? cargo.length : nextSectionIdx);
           const tail = nextSectionIdx === -1 ? '' : cargo.slice(nextSectionIdx);
+          if (!/^version\s*=\s*".*"$/m.test(pkgSection)) throw new Error('Cargo.toml [package] version line not found');
           const updatedPkgSection = pkgSection.replace(/^version\s*=\s*".*"$/m, `version = "${version}"`);
-          if (updatedPkgSection === pkgSection) throw new Error('Cargo.toml [package] version line not found');
           fs.writeFileSync(cargoPath, head + updatedPkgSection + tail);
           NODE
 
