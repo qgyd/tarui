@@ -42,7 +42,7 @@
       "endpoints": [
         "https://github.com/qgyd/tarui/releases/latest/download/latest.json"
       ],
-      "pubkey": "YOUR_PUBLIC_KEY_HERE"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEREQUU3MDQ5RDYyMjJCN0EKUldSNkt5TFdTWEN1M1ltc001SE5oWmIwZFVxUWsyZFR4eTJGWldyQ3VQeEJzMmFyK1djTGJxVCsK"
     }
   }
 }
