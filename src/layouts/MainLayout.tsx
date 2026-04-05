@@ -12,6 +12,7 @@ import {
   SunOutlined,
   MoonOutlined,
   DesktopOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
@@ -140,6 +141,11 @@ const MainLayout: React.FC = () => {
       key: "/dashboard",
       icon: <DashboardOutlined />,
       label: <Link to="/dashboard">控制台</Link>,
+    },
+    {
+      key: "/settings",
+      icon: <SettingOutlined />,
+      label: <Link to="/settings">设置</Link>,
     },
   ];
 

@@ -11,8 +11,9 @@ import Recorder from "@/pages/tool/Recorder";
 import MusicPlayer from "@/pages/tool/MusicPlayer";
 import Notebook from "@/pages/tool/Notebook";
 import MediaConverter from "@/pages/tool/MediaConverter";
+import Settings from "@/pages/Settings";
 
-import MainLayout from "@/layouts/MainLayout"; // 引入布局组件
+import MainLayout from "@/layouts/MainLayout";
 
 const router = createBrowserRouter([
   {
@@ -63,6 +64,10 @@ const router = createBrowserRouter([
           {
             path: "dashboard",
             element: createElement(Dashboard),
+          },
+          {
+            path: "settings",
+            element: createElement(Settings),
           },
         ],
       },
