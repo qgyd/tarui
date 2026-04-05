@@ -123,12 +123,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![greet, get_system_info, convert_media_native])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
