@@ -87,7 +87,7 @@ jobs:
       - name: Sync app version from package.json
         shell: bash
         run: |
-          node - <<'NODE'
+          node --input-type=module - <<'NODE'
           import fs from 'node:fs';
           const version = JSON.parse(fs.readFileSync('./package.json', 'utf8')).version;
           const tauriConfPath = './src-tauri/tauri.conf.json';
@@ -141,58 +141,6 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate latest.json for updater
-        run: |
-          node - <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-
-          const version = process.env.VERSION;
-          const repo = process.env.GH_REPO;
-          const baseUrl = `https://github.com/${repo}/releases/download/v${version}`;
-
-          function findFiles(dir, results = []) {
-            if (!fs.existsSync(dir)) return results;
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-              const full = path.join(dir, entry.name);
-              entry.isDirectory() ? findFiles(full, results) : results.push(full);
-            }
-            return results;
-          }
-
-          const sigFiles = findFiles('artifacts').filter(f => f.endsWith('.sig'));
-          const platforms = {};
-
-          for (const sigFile of sigFiles) {
-            const sig = fs.readFileSync(sigFile, 'utf8').trim();
-            const archiveName = path.basename(sigFile.replace(/\.sig$/, ''));
-            const url = `${baseUrl}/${archiveName}`;
-            let platform = null;
-
-            if (archiveName.endsWith('.app.tar.gz')) {
-              platform = archiveName.includes('aarch64') ? 'darwin-aarch64' : 'darwin-x86_64';
-            } else if (archiveName.includes('.AppImage')) {
-              platform = 'linux-x86_64';
-            } else if (archiveName.endsWith('.nsis.zip')) {
-              platform = 'windows-x86_64';
-            }
-
-            if (platform && !platforms[platform]) {
-              platforms[platform] = { signature: sig, url };
-            }
-          }
-
-          const latestJson = {
-            version,
-            notes: 'See the assets to download this version and install.',
-            pub_date: new Date().toISOString(),
-            platforms,
-          };
-
-          fs.writeFileSync('latest.json', JSON.stringify(latestJson, null, 2) + '\n');
-          console.log('Generated latest.json:\n' + JSON.stringify(latestJson, null, 2));
-          NODE
-
       - name: Create GitHub Release
         run: |
           gh release create "v${VERSION}" \
@@ -202,8 +150,15 @@ jobs:
 
       - name: Upload bundle files
         run: |
-          find artifacts -type f -print0 | xargs -0 gh release upload "v${VERSION}" --repo "${GH_REPO}" --clobber
+          find artifacts -type f \( \
+            -name "*.dmg" -o \
+            -name "*.exe" -o \
+            -name "*.msi" -o \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.app.tar.gz" -o \
+            -name "*.sig" -o \
+            -name "*.nsis.zip" \
+          \) -print0 | xargs -0 gh release upload "v${VERSION}" --repo "${GH_REPO}" --clobber
 
-      - name: Upload latest.json
-        run: |
-          gh release upload "v${VERSION}" latest.json --repo "${GH_REPO}" --clobber
