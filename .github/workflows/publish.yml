@@ -45,18 +45,21 @@ jobs:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
-            bundles: dmg,app
+            bundles: dmg,updater
           - platform: macos-latest
             target: x86_64-apple-darwin
-            bundles: dmg,app
+            bundles: dmg,updater
           - platform: ubuntu-22.04
             target: ""
-            bundles: appimage,deb
+            bundles: appimage,deb,updater
           - platform: windows-latest
             target: ""
-            bundles: nsis,msi
+            bundles: nsis,msi,updater
 
     runs-on: ${{ matrix.platform }}
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -141,6 +144,9 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: List artifacts for debugging
+        run: find artifacts -type f | sort
+
       - name: Create GitHub Release
         run: |
           gh release create "v${VERSION}" \
@@ -158,7 +164,96 @@ jobs:
             -name "*.deb" -o \
             -name "*.rpm" -o \
             -name "*.app.tar.gz" -o \
-            -name "*.sig" -o \
-            -name "*.nsis.zip" \
+            -name "*.AppImage.tar.gz" -o \
+            -name "*.nsis.zip" -o \
+            -name "*.msi.zip" -o \
+            -name "*.sig" \
           \) -print0 | xargs -0 gh release upload "v${VERSION}" --repo "${GH_REPO}" --clobber
 
+      - name: Generate latest.json for updater
+        shell: bash
+        run: |
+          BASE_URL="https://github.com/${GH_REPO}/releases/download/v${VERSION}"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          node --input-type=module - <<NODE
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const baseUrl = "${BASE_URL}";
+          const version = "${VERSION}";
+          const pubDate = "${PUB_DATE}";
+
+          function walk(dir) {
+            const results = [];
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) results.push(...walk(full));
+              else results.push(full);
+            }
+            return results;
+          }
+
+          const files = walk('artifacts');
+
+          function findFile(pattern) {
+            return files.find(f => pattern.test(path.basename(f)));
+          }
+          function readSig(sigPath) {
+            if (!sigPath) return '';
+            try { return fs.readFileSync(sigPath, 'utf8').trim(); }
+            catch { return ''; }
+          }
+
+          const platforms = {};
+
+          // macOS aarch64
+          const macArmTar = findFile(/\.app\.tar\.gz$/);
+          const macArmTarFiles = files.filter(f => /aarch64.*\.app\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
+          const macArmSig  = files.filter(f => /aarch64.*\.app\.tar\.gz\.sig$/.test(f));
+          if (macArmTarFiles.length > 0 && macArmSig.length > 0) {
+            platforms['darwin-aarch64'] = {
+              signature: readSig(macArmSig[0]),
+              url: baseUrl + '/' + path.basename(macArmTarFiles[0]),
+            };
+          }
+
+          // macOS x86_64
+          const macX64TarFiles = files.filter(f => /x86_64.*\.app\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
+          const macX64Sig  = files.filter(f => /x86_64.*\.app\.tar\.gz\.sig$/.test(f));
+          if (macX64TarFiles.length > 0 && macX64Sig.length > 0) {
+            platforms['darwin-x86_64'] = {
+              signature: readSig(macX64Sig[0]),
+              url: baseUrl + '/' + path.basename(macX64TarFiles[0]),
+            };
+          }
+
+          // Linux x86_64
+          const linuxTarFiles = files.filter(f => /\.AppImage\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
+          const linuxSig = files.filter(f => /\.AppImage\.tar\.gz\.sig$/.test(f));
+          if (linuxTarFiles.length > 0 && linuxSig.length > 0) {
+            platforms['linux-x86_64'] = {
+              signature: readSig(linuxSig[0]),
+              url: baseUrl + '/' + path.basename(linuxTarFiles[0]),
+            };
+          }
+
+          // Windows x86_64
+          const winNsisFiles = files.filter(f => /\.nsis\.zip$/.test(f) && !f.endsWith('.sig'));
+          const winNsisSig = files.filter(f => /\.nsis\.zip\.sig$/.test(f));
+          if (winNsisFiles.length > 0 && winNsisSig.length > 0) {
+            platforms['windows-x86_64'] = {
+              signature: readSig(winNsisSig[0]),
+              url: baseUrl + '/' + path.basename(winNsisFiles[0]),
+            };
+          }
+
+          const latest = { version, notes: 'See the assets to download this version and install.', pub_date: pubDate, platforms };
+          fs.writeFileSync('latest.json', JSON.stringify(latest, null, 2));
+          console.log('Generated latest.json:');
+          console.log(JSON.stringify(latest, null, 2));
+          NODE
+
+      - name: Upload latest.json
+        run: |
+          gh release upload "v${VERSION}" latest.json --repo "${GH_REPO}" --clobber

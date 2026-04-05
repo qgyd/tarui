@@ -9,6 +9,7 @@
     "shell:default",
     "dialog:default",
     "process:default",
+    "updater:default",
     "core:webview:allow-internal-toggle-devtools"
   ]
 }

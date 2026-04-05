@@ -49,7 +49,6 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (!import.meta.env.PROD) return;
     if (!(window as any).__TAURI_INTERNALS__) return;
-    if (import.meta.env.VITE_UPDATER_ENABLED !== "true") return;
 
     const timer = window.setTimeout(() => {
       void (async () => {
