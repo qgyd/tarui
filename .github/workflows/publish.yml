@@ -48,36 +48,31 @@ jobs:
           fi
 
       - name: Install dependencies (ubuntu only)
-        if: steps.release_check.outputs.should_release == 'true' && matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup node
-        if: steps.release_check.outputs.should_release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
 
       - name: Install Rust stable
-        if: steps.release_check.outputs.should_release == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
-        if: steps.release_check.outputs.should_release == 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
-        if: steps.release_check.outputs.should_release == 'true'
         run: npm install
 
       - name: Sync app version from package.json
-        if: steps.release_check.outputs.should_release == 'true'
         shell: bash
         run: |
           node - <<'NODE'
@@ -99,6 +94,17 @@ jobs:
           if (updatedPkgSection === pkgSection) throw new Error('Cargo.toml [package] version line not found');
           fs.writeFileSync(cargoPath, head + updatedPkgSection + tail);
           NODE
+
+      - name: Build (CI artifact)
+        run: npm run tauri build -- ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-bundle-${{ matrix.platform }}-${{ steps.meta.outputs.version }}-${{ strategy.job-index }}
+          if-no-files-found: warn
+          path: |
+            src-tauri/target/**/release/bundle/**
 
       - uses: tauri-apps/tauri-action@v0
         if: steps.release_check.outputs.should_release == 'true'
