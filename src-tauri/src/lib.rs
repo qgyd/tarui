@@ -116,6 +116,11 @@ async fn convert_media_native(
     }
 }
 
+#[tauri::command]
+async fn read_image_file(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -124,7 +129,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![greet, get_system_info, convert_media_native])
+        .invoke_handler(tauri::generate_handler![greet, get_system_info, convert_media_native, read_image_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

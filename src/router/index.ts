@@ -11,6 +11,7 @@ import Recorder from "@/pages/tool/Recorder";
 import MusicPlayer from "@/pages/tool/MusicPlayer";
 import Notebook from "@/pages/tool/Notebook";
 import MediaConverter from "@/pages/tool/MediaConverter";
+import ImageConverter from "@/pages/tool/ImageConverter";
 import Settings from "@/pages/Settings";
 
 import MainLayout from "@/layouts/MainLayout";
@@ -58,6 +59,10 @@ const router = createBrowserRouter([
               {
                 path: "converter",
                 element: createElement(MediaConverter),
+              },
+              {
+                path: "image-converter",
+                element: createElement(ImageConverter),
               },
             ],
           },

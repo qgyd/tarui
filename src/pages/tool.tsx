@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Row, Col, Typography } from 'antd';
-import { AudioOutlined, CustomerServiceOutlined, FormOutlined, SwapOutlined } from '@ant-design/icons';
+import { AudioOutlined, CustomerServiceOutlined, FormOutlined, SwapOutlined, PictureOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
 
 const { Title, Text } = Typography;
@@ -29,6 +29,12 @@ const tools = [
     icon: <SwapOutlined style={{ fontSize: '48px', color: '#722ed1' }} />,
     path: '/tool/converter',
     description: '格式转换，轻松搞定',
+  },
+  {
+    title: '图片转换',
+    icon: <PictureOutlined style={{ fontSize: '48px', color: '#fa8c16' }} />,
+    path: '/tool/image-converter',
+    description: '图片格式转换，自定义底色',
   },
 ];
 
