@@ -20,7 +20,6 @@ import {
   SyncOutlined,
   CheckCircleOutlined,
   CloudDownloadOutlined,
-  InfoCircleOutlined,
 } from "@ant-design/icons";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
