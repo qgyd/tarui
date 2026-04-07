@@ -119,12 +119,27 @@ jobs:
             npm run tauri build -- --bundles ${{ matrix.bundles }}
           fi
 
+      - name: Rename macOS updater artifacts to include arch
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          ARCH=${{ matrix.target == 'aarch64-apple-darwin' && 'aarch64' || 'x64' }}
+          find src-tauri/target -name "*.app.tar.gz" ! -name "*.sig" | while read f; do
+            dir=$(dirname "$f")
+            base=$(basename "$f" .app.tar.gz)
+            mv "$f" "${dir}/${base}_${ARCH}.app.tar.gz"
+            [ -f "${f}.sig" ] && mv "${f}.sig" "${dir}/${base}_${ARCH}.app.tar.gz.sig"
+          done
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ matrix.platform }}-${{ matrix.target || 'default' }}
           if-no-files-found: warn
-          path: src-tauri/target/**/release/bundle/**
+          path: |
+            src-tauri/target/**/release/bundle/**
+            !src-tauri/target/**/release/bundle/macos/*.app
+            !src-tauri/target/**/release/bundle/macos/*.app/**
 
   # ── Job 3: 汇总产物、生成 latest.json、创建 Release ──────────────────────
   release:
@@ -196,9 +211,6 @@ jobs:
 
           const files = walk('artifacts');
 
-          function findFile(pattern) {
-            return files.find(f => pattern.test(path.basename(f)));
-          }
           function readSig(sigPath) {
             if (!sigPath) return '';
             try { return fs.readFileSync(sigPath, 'utf8').trim(); }
@@ -207,44 +219,57 @@ jobs:
 
           const platforms = {};
 
-          // macOS aarch64
-          const macArmTar = findFile(/\.app\.tar\.gz$/);
-          const macArmTarFiles = files.filter(f => /aarch64.*\.app\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
-          const macArmSig  = files.filter(f => /aarch64.*\.app\.tar\.gz\.sig$/.test(f));
-          if (macArmTarFiles.length > 0 && macArmSig.length > 0) {
+          // macOS aarch64 (.app.tar.gz renamed to include arch)
+          const macArmTar = files.find(f => /aarch64\.app\.tar\.gz$/.test(path.basename(f)));
+          const macArmSig = files.find(f => /aarch64\.app\.tar\.gz\.sig$/.test(path.basename(f)));
+          if (macArmTar && macArmSig) {
             platforms['darwin-aarch64'] = {
-              signature: readSig(macArmSig[0]),
-              url: baseUrl + '/' + path.basename(macArmTarFiles[0]),
+              signature: readSig(macArmSig),
+              url: baseUrl + '/' + path.basename(macArmTar),
             };
           }
 
-          // macOS x86_64
-          const macX64TarFiles = files.filter(f => /x86_64.*\.app\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
-          const macX64Sig  = files.filter(f => /x86_64.*\.app\.tar\.gz\.sig$/.test(f));
-          if (macX64TarFiles.length > 0 && macX64Sig.length > 0) {
+          // macOS x86_64 (.app.tar.gz renamed to include arch)
+          const macX64Tar = files.find(f => /x64\.app\.tar\.gz$/.test(path.basename(f)));
+          const macX64Sig = files.find(f => /x64\.app\.tar\.gz\.sig$/.test(path.basename(f)));
+          if (macX64Tar && macX64Sig) {
             platforms['darwin-x86_64'] = {
-              signature: readSig(macX64Sig[0]),
-              url: baseUrl + '/' + path.basename(macX64TarFiles[0]),
+              signature: readSig(macX64Sig),
+              url: baseUrl + '/' + path.basename(macX64Tar),
             };
           }
 
-          // Linux x86_64
-          const linuxTarFiles = files.filter(f => /\.AppImage\.tar\.gz$/.test(f) && !f.endsWith('.sig'));
-          const linuxSig = files.filter(f => /\.AppImage\.tar\.gz\.sig$/.test(f));
-          if (linuxTarFiles.length > 0 && linuxSig.length > 0) {
+          // Linux x86_64 (prefer .AppImage.tar.gz, fallback to .AppImage)
+          const linuxTar = files.find(f => /\.AppImage\.tar\.gz$/.test(path.basename(f)) && !f.endsWith('.sig'));
+          const linuxTarSig = files.find(f => /\.AppImage\.tar\.gz\.sig$/.test(path.basename(f)));
+          const linuxAppImage = files.find(f => /\.AppImage$/.test(path.basename(f)));
+          const linuxAppImageSig = files.find(f => /\.AppImage\.sig$/.test(path.basename(f)));
+          if (linuxTar && linuxTarSig) {
             platforms['linux-x86_64'] = {
-              signature: readSig(linuxSig[0]),
-              url: baseUrl + '/' + path.basename(linuxTarFiles[0]),
+              signature: readSig(linuxTarSig),
+              url: baseUrl + '/' + path.basename(linuxTar),
+            };
+          } else if (linuxAppImage && linuxAppImageSig) {
+            platforms['linux-x86_64'] = {
+              signature: readSig(linuxAppImageSig),
+              url: baseUrl + '/' + path.basename(linuxAppImage),
             };
           }
 
-          // Windows x86_64
-          const winNsisFiles = files.filter(f => /\.nsis\.zip$/.test(f) && !f.endsWith('.sig'));
-          const winNsisSig = files.filter(f => /\.nsis\.zip\.sig$/.test(f));
-          if (winNsisFiles.length > 0 && winNsisSig.length > 0) {
+          // Windows x86_64 (prefer .nsis.zip, fallback to setup.exe)
+          const winNsisZip = files.find(f => /\.nsis\.zip$/.test(path.basename(f)) && !f.endsWith('.sig'));
+          const winNsisSig = files.find(f => /\.nsis\.zip\.sig$/.test(path.basename(f)));
+          const winExe = files.find(f => /setup\.exe$/.test(path.basename(f)));
+          const winExeSig = files.find(f => /setup\.exe\.sig$/.test(path.basename(f)));
+          if (winNsisZip && winNsisSig) {
             platforms['windows-x86_64'] = {
-              signature: readSig(winNsisSig[0]),
-              url: baseUrl + '/' + path.basename(winNsisFiles[0]),
+              signature: readSig(winNsisSig),
+              url: baseUrl + '/' + path.basename(winNsisZip),
+            };
+          } else if (winExe && winExeSig) {
+            platforms['windows-x86_64'] = {
+              signature: readSig(winExeSig),
+              url: baseUrl + '/' + path.basename(winExe),
             };
           }
 
