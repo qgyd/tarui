@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, Button, Space, Typography, Select, message, Slider, Checkbox, Empty, Row, Col } from 'antd';
 import {
   PictureOutlined,
@@ -28,17 +28,17 @@ const IMAGE_EXTS = new Set([
 ]);
 
 const MIME_MAP: Record<string, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  bmp: 'image/bmp',
-  gif: 'image/gif',
-  svg: 'image/svg+xml',
-  ico: 'image/x-icon',
-  tiff: 'image/tiff',
-  tif: 'image/tiff',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  webp: 'image/webp', bmp: 'image/bmp', gif: 'image/gif',
+  svg: 'image/svg+xml', ico: 'image/x-icon', tiff: 'image/tiff', tif: 'image/tiff',
 };
+
+const PRESET_COLORS = ['#ffffff', '#000000', '#f5f5f5', '#ff4d4f', '#1677ff', '#52c41a', '#faad14', '#722ed1'];
+
+const CHECKER_BG = 'repeating-conic-gradient(#e0e0e0 0% 25%, transparent 0% 50%) 50% / 16px 16px';
+
+const PREVIEW_MAX_W = 600;
+const PREVIEW_MAX_H = 300;
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
@@ -48,6 +48,25 @@ function formatFileSize(bytes: number): string {
 
 function getExtension(name: string): string {
   return (name.split('.').pop() ?? '').toLowerCase();
+}
+
+function drawToCanvas(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  w: number,
+  h: number,
+  fillBg: boolean,
+  color: string,
+) {
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, w, h);
+  if (fillBg) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.drawImage(img, 0, 0, w, h);
 }
 
 const ImageConverter: React.FC = () => {
@@ -71,16 +90,16 @@ const ImageConverter: React.FC = () => {
 
   const needsBgFill = applyBgColor || targetFormat === 'jpeg' || targetFormat === 'bmp';
 
-  // ── helpers ──────────────────────────────────────────────
+  const resetResult = useCallback(() => setResultUrl(''), []);
 
   const setImage = useCallback((img: HTMLImageElement, name: string, blobUrl: string, size?: number) => {
     setOriginalImage(img);
     setOriginalFileName(name);
     setPreviewUrl(blobUrl);
     setImageInfo({ w: img.naturalWidth, h: img.naturalHeight, size: size != null ? formatFileSize(size) : undefined });
-    setResultUrl('');
+    resetResult();
     message.success(`已加载: ${name}`);
-  }, []);
+  }, [resetResult]);
 
   const loadBlob = useCallback(
     (blob: Blob, name: string) => {
@@ -96,7 +115,6 @@ const ImageConverter: React.FC = () => {
     [setImage],
   );
 
-  /** 通过 Tauri invoke 读取本地文件路径 → blob → Image */
   const loadFromPath = useCallback(
     async (filePath: string) => {
       const name = filePath.split('/').pop() ?? filePath;
@@ -107,8 +125,7 @@ const ImageConverter: React.FC = () => {
       }
       try {
         const bytes: number[] = await invoke('read_image_file', { path: filePath });
-        const mime = MIME_MAP[ext] || 'image/png';
-        const blob = new Blob([new Uint8Array(bytes)], { type: mime });
+        const blob = new Blob([new Uint8Array(bytes)], { type: MIME_MAP[ext] || 'image/png' });
         loadBlob(blob, name);
       } catch (err) {
         message.error(`读取文件失败: ${err}`);
@@ -117,8 +134,7 @@ const ImageConverter: React.FC = () => {
     [loadBlob],
   );
 
-  // ── Tauri native drag-drop ──────────────────────────────
-
+  // Tauri native drag-drop
   useEffect(() => {
     let unlisten: (() => void) | null = null;
 
@@ -130,15 +146,11 @@ const ImageConverter: React.FC = () => {
 
           if (p.type === 'over') {
             const r = dropZoneRef.current.getBoundingClientRect();
-            const pos = p.position;
-            const inside =
-              pos &&
-              typeof pos.x === 'number' &&
-              typeof pos.y === 'number' &&
-              pos.x >= r.left && pos.x <= r.right &&
-              pos.y >= r.top && pos.y <= r.bottom;
-            isPointerOverRef.current = Boolean(inside);
-            setIsDragOver(Boolean(inside));
+            const { x, y } = p.position ?? {};
+            const inside = typeof x === 'number' && typeof y === 'number'
+              && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+            isPointerOverRef.current = inside;
+            setIsDragOver(inside);
           } else if (p.type === 'drop') {
             setIsDragOver(false);
             if (!isPointerOverRef.current) return;
@@ -149,9 +161,7 @@ const ImageConverter: React.FC = () => {
             setIsDragOver(false);
           }
         });
-      } catch {
-        /* 非 Tauri 环境 */
-      }
+      } catch { /* non-Tauri */ }
     })();
 
     return () => {
@@ -161,20 +171,16 @@ const ImageConverter: React.FC = () => {
     };
   }, [loadFromPath]);
 
-  // ── HTML5 drag-drop (fallback) ──────────────────────────
-
   const onHtmlDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
       const file = e.dataTransfer?.files?.[0];
-      if (file && file.type.startsWith('image/')) loadBlob(file, file.name);
+      if (file?.type.startsWith('image/')) loadBlob(file, file.name);
     },
     [loadBlob],
   );
-
-  // ── file input ──────────────────────────────────────────
 
   const onFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,59 +191,32 @@ const ImageConverter: React.FC = () => {
     [loadBlob],
   );
 
-  // ── live preview (bg color) ─────────────────────────────
-
+  // Live preview with background color
   useEffect(() => {
     if (!originalImage || !previewCanvasRef.current) return;
-    const c = previewCanvasRef.current;
-    const ctx = c.getContext('2d');
-    if (!ctx) return;
-
-    const maxW = 600, maxH = 300;
-    const scale = Math.min(1, maxW / originalImage.naturalWidth, maxH / originalImage.naturalHeight);
-    c.width = Math.round(originalImage.naturalWidth * scale);
-    c.height = Math.round(originalImage.naturalHeight * scale);
-
-    ctx.clearRect(0, 0, c.width, c.height);
-    if (needsBgFill) {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, c.width, c.height);
-    }
-    ctx.drawImage(originalImage, 0, 0, c.width, c.height);
+    const scale = Math.min(1, PREVIEW_MAX_W / originalImage.naturalWidth, PREVIEW_MAX_H / originalImage.naturalHeight);
+    drawToCanvas(
+      previewCanvasRef.current, originalImage,
+      Math.round(originalImage.naturalWidth * scale),
+      Math.round(originalImage.naturalHeight * scale),
+      needsBgFill, bgColor,
+    );
   }, [originalImage, bgColor, needsBgFill]);
-
-  // ── convert ─────────────────────────────────────────────
 
   const handleConvert = useCallback(() => {
     if (!originalImage || !canvasRef.current) {
       message.error('请先选择图片');
       return;
     }
-    const c = canvasRef.current;
-    const ctx = c.getContext('2d');
-    if (!ctx) return;
-
-    c.width = originalImage.naturalWidth;
-    c.height = originalImage.naturalHeight;
-    ctx.clearRect(0, 0, c.width, c.height);
-
-    if (needsBgFill) {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, c.width, c.height);
-    }
-    ctx.drawImage(originalImage, 0, 0);
-
-    const mime = `image/${targetFormat}`;
+    drawToCanvas(canvasRef.current, originalImage, originalImage.naturalWidth, originalImage.naturalHeight, needsBgFill, bgColor);
     const q = (targetFormat === 'jpeg' || targetFormat === 'webp') ? quality / 100 : undefined;
-    setResultUrl(c.toDataURL(mime, q));
+    setResultUrl(canvasRef.current.toDataURL(`image/${targetFormat}`, q));
     message.success('转换完成！');
   }, [originalImage, targetFormat, quality, bgColor, needsBgFill]);
 
-  // ── download ────────────────────────────────────────────
-
   const handleDownload = useCallback(() => {
     if (!resultUrl) return;
-    const stem = originalFileName.split('.').slice(0, -1).join('.') || 'image';
+    const stem = originalFileName.replace(/\.[^.]+$/, '') || 'image';
     const ext = targetFormat === 'jpeg' ? 'jpg' : targetFormat;
     const a = document.createElement('a');
     a.href = resultUrl;
@@ -246,8 +225,6 @@ const ImageConverter: React.FC = () => {
     a.click();
     document.body.removeChild(a);
   }, [resultUrl, originalFileName, targetFormat]);
-
-  // ── clear ───────────────────────────────────────────────
 
   const handleClear = useCallback(() => {
     if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
@@ -258,10 +235,8 @@ const ImageConverter: React.FC = () => {
     setImageInfo(null);
   }, [previewUrl]);
 
-  // ── render ──────────────────────────────────────────────
-
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: 24 }}>
       <Space align="center" style={{ marginBottom: 24 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tool')} />
         <Title level={2} style={{ margin: 0 }}>图片格式转换</Title>
@@ -270,29 +245,20 @@ const ImageConverter: React.FC = () => {
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
 
-          {/* ── 拖拽 / 选择区域 ── */}
+          {/* 拖拽 / 选择区域 */}
           <div
             ref={dropZoneRef}
             style={{
               border: `2px dashed ${isDragOver ? '#1677ff' : '#d9d9d9'}`,
-              padding: '40px',
-              textAlign: 'center',
-              borderRadius: 8,
+              padding: 40, textAlign: 'center', borderRadius: 8,
               background: isDragOver ? '#e6f4ff' : undefined,
-              transition: 'all .15s ease',
-              userSelect: 'none',
+              transition: 'all .15s ease', userSelect: 'none',
             }}
             onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
             onDragLeave={(e) => { e.preventDefault(); setIsDragOver(false); }}
             onDrop={onHtmlDrop}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={onFileInput}
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileInput} />
             <Button icon={<FolderOpenOutlined />} onClick={() => fileInputRef.current?.click()} size="large">
               选择图片文件
             </Button>
@@ -313,35 +279,23 @@ const ImageConverter: React.FC = () => {
             )}
           </div>
 
-          {/* ── 原图预览 ── */}
+          {/* 原图预览 */}
           {previewUrl && (
             <div style={{ textAlign: 'center' }}>
               <Text strong style={{ display: 'block', marginBottom: 8 }}>原图预览</Text>
               <img
-                src={previewUrl}
-                alt="preview"
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: 300,
-                  borderRadius: 8,
-                  border: '1px solid #f0f0f0',
-                  background: 'repeating-conic-gradient(#e0e0e0 0% 25%, transparent 0% 50%) 50% / 16px 16px',
-                }}
+                src={previewUrl} alt="preview"
+                style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #f0f0f0', background: CHECKER_BG }}
               />
             </div>
           )}
 
-          {/* ── 格式 & 质量 ── */}
+          {/* 格式 & 质量 */}
           <Row gutter={[16, 16]} align="middle">
             <Col xs={24} sm={8}>
               <Space>
                 <Text>目标格式:</Text>
-                <Select
-                  value={targetFormat}
-                  style={{ width: 120 }}
-                  onChange={(v) => setTargetFormat(v)}
-                  options={FORMAT_OPTIONS}
-                />
+                <Select value={targetFormat} style={{ width: 120 }} onChange={setTargetFormat} options={FORMAT_OPTIONS} />
               </Space>
             </Col>
             {(targetFormat === 'jpeg' || targetFormat === 'webp') && (
@@ -355,11 +309,8 @@ const ImageConverter: React.FC = () => {
             )}
           </Row>
 
-          {/* ── 底色设置 ── */}
-          <Card
-            size="small"
-            title={<Space><BgColorsOutlined />底色设置</Space>}
-          >
+          {/* 底色设置 */}
+          <Card size="small" title={<Space><BgColorsOutlined />底色设置</Space>}>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <Checkbox checked={applyBgColor} onChange={(e) => setApplyBgColor(e.target.checked)}>
                 应用自定义底色（替换透明区域）
@@ -372,33 +323,19 @@ const ImageConverter: React.FC = () => {
               <Space align="center">
                 <Text>底色:</Text>
                 <input
-                  type="color"
-                  value={bgColor}
+                  type="color" value={bgColor}
                   onChange={(e) => setBgColor(e.target.value)}
-                  style={{
-                    width: 40,
-                    height: 32,
-                    padding: 0,
-                    border: '1px solid #d9d9d9',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    background: 'none',
-                  }}
+                  style={{ width: 40, height: 32, padding: 0, border: '1px solid #d9d9d9', borderRadius: 6, cursor: 'pointer', background: 'none' }}
                 />
                 <Text type="secondary" style={{ fontFamily: 'monospace', fontSize: 13 }}>{bgColor}</Text>
                 <Space size={4} style={{ marginLeft: 8 }}>
-                  {['#ffffff', '#000000', '#f5f5f5', '#ff4d4f', '#1677ff', '#52c41a', '#faad14', '#722ed1'].map((c) => (
+                  {PRESET_COLORS.map((c) => (
                     <div
-                      key={c}
-                      onClick={() => setBgColor(c)}
+                      key={c} onClick={() => setBgColor(c)}
                       style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 4,
-                        backgroundColor: c,
+                        width: 22, height: 22, borderRadius: 4, backgroundColor: c,
                         border: bgColor === c ? '2px solid #1677ff' : '1px solid #d9d9d9',
-                        cursor: 'pointer',
-                        transition: 'border .15s',
+                        cursor: 'pointer', transition: 'border .15s',
                       }}
                     />
                   ))}
@@ -407,43 +344,32 @@ const ImageConverter: React.FC = () => {
             </Space>
           </Card>
 
-          {/* ── 底色实时预览 ── */}
+          {/* 底色实时预览 */}
           {originalImage && needsBgFill && (
             <div style={{ textAlign: 'center' }}>
               <Text strong style={{ display: 'block', marginBottom: 8 }}>底色效果预览</Text>
-              <canvas
-                ref={previewCanvasRef}
-                style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }}
-              />
+              <canvas ref={previewCanvasRef} style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid #f0f0f0' }} />
             </div>
           )}
 
-          {/* ── 操作按钮 ── */}
+          {/* 操作按钮 */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
             <Button type="primary" icon={<PictureOutlined />} onClick={handleConvert} disabled={!originalImage} size="large">
               开始转换
             </Button>
             {resultUrl && (
-              <Button icon={<DownloadOutlined />} onClick={handleDownload} size="large">
-                下载结果
-              </Button>
+              <Button icon={<DownloadOutlined />} onClick={handleDownload} size="large">下载结果</Button>
             )}
             {originalImage && (
-              <Button icon={<DeleteOutlined />} danger onClick={handleClear} size="large">
-                清除
-              </Button>
+              <Button icon={<DeleteOutlined />} danger onClick={handleClear} size="large">清除</Button>
             )}
           </div>
 
-          {/* ── 转换结果 ── */}
+          {/* 转换结果 */}
           {resultUrl && (
             <Card title="转换结果" size="small" style={{ background: '#f6ffed', borderColor: '#b7eb8f' }}>
               <div style={{ textAlign: 'center' }}>
-                <img
-                  src={resultUrl}
-                  alt="result"
-                  style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #d9d9d9' }}
-                />
+                <img src={resultUrl} alt="result" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #d9d9d9' }} />
               </div>
             </Card>
           )}

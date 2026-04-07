@@ -1,38 +1,39 @@
-import React from 'react';
 import { Card, Row, Col, Typography } from 'antd';
 import { AudioOutlined, CustomerServiceOutlined, FormOutlined, SwapOutlined, PictureOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router';
 
 const { Title, Text } = Typography;
 
+const ICON_STYLE = { fontSize: 48 };
+
 const tools = [
   {
     title: '录音机',
-    icon: <AudioOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />,
+    icon: <AudioOutlined style={{ ...ICON_STYLE, color: '#ff4d4f' }} />,
     path: '/tool/recorder',
     description: '随时随地，记录声音',
   },
   {
     title: '音乐播放',
-    icon: <CustomerServiceOutlined style={{ fontSize: '48px', color: '#1677ff' }} />,
+    icon: <CustomerServiceOutlined style={{ ...ICON_STYLE, color: '#1677ff' }} />,
     path: '/tool/music',
     description: '本地音乐，畅快聆听',
   },
   {
     title: '笔记本',
-    icon: <FormOutlined style={{ fontSize: '48px', color: '#52c41a' }} />,
+    icon: <FormOutlined style={{ ...ICON_STYLE, color: '#52c41a' }} />,
     path: '/tool/notebook',
     description: '灵感瞬间，即刻记录',
   },
   {
     title: '媒体转换',
-    icon: <SwapOutlined style={{ fontSize: '48px', color: '#722ed1' }} />,
+    icon: <SwapOutlined style={{ ...ICON_STYLE, color: '#722ed1' }} />,
     path: '/tool/converter',
     description: '格式转换，轻松搞定',
   },
   {
     title: '图片转换',
-    icon: <PictureOutlined style={{ fontSize: '48px', color: '#fa8c16' }} />,
+    icon: <PictureOutlined style={{ ...ICON_STYLE, color: '#fa8c16' }} />,
     path: '/tool/image-converter',
     description: '图片格式转换，自定义底色',
   },
@@ -43,9 +44,9 @@ const Tool: React.FC = () => {
 
   return (
     <div style={{ padding: '40px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <Title level={1}>我的工具箱</Title>
-        <Text type="secondary" style={{ fontSize: '16px' }}>
+        <Text type="secondary" style={{ fontSize: 16 }}>
           实用的小工具，让工作更高效
         </Text>
       </div>
@@ -57,7 +58,7 @@ const Tool: React.FC = () => {
               hoverable
               style={{
                 textAlign: 'center',
-                borderRadius: '16px',
+                borderRadius: 16,
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
@@ -66,10 +67,10 @@ const Tool: React.FC = () => {
                 transition: 'all 0.3s',
               }}
               onClick={() => navigate(tool.path)}
-              bodyStyle={{ padding: '24px' }}
+              styles={{ body: { padding: 24 } }}
             >
-              <div style={{ marginBottom: '24px' }}>{tool.icon}</div>
-              <Title level={4} style={{ marginBottom: '8px' }}>
+              <div style={{ marginBottom: 24 }}>{tool.icon}</div>
+              <Title level={4} style={{ marginBottom: 8 }}>
                 {tool.title}
               </Title>
               <Text type="secondary">{tool.description}</Text>

@@ -1,7 +1,8 @@
+use std::process::Command;
+
 use serde::Serialize;
 use sysinfo::{System, Disks};
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -72,8 +73,6 @@ fn get_system_info() -> SystemInfo {
         disks,
     }
 }
-
-use std::process::Command;
 
 #[tauri::command]
 async fn convert_media_native(
